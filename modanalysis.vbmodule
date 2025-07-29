@@ -1,0 +1,157 @@
+Option Explicit
+
+Public Function CalculateScores(data As Variant, settings As Variant) As Variant
+    Dim l1 As Long, u1 As Long, l2 As Long, u2 As Long
+    Dim n As Long, k As Long
+    Dim i As Long, j As Long
+    Dim values() As Variant
+    Dim name As String
+    Dim score As Double
+    Dim scores() As Variant
+    
+    If Not IsArray(data) Then Err.Raise vbObjectError + 520, "CalculateScores", "Data is not an array."
+    If Not IsArray(settings) Then Err.Raise vbObjectError + 521, "CalculateScores", "Settings is not an array."
+    
+    On Error GoTo ErrHandler
+    
+    l1 = LBound(data, 1): u1 = UBound(data, 1)
+    l2 = LBound(data, 2): u2 = UBound(data, 2)
+    If u1 < l1 Then Err.Raise vbObjectError + 522, "CalculateScores", "Data array has no rows."
+    If (u2 - l2 + 1) < 2 Then Err.Raise vbObjectError + 523, "CalculateScores", "Data array must have at least two columns."
+    
+    n = u1 - l1 + 1
+    k = u2 - l2
+    
+    If (UBound(settings) - LBound(settings) + 1) <> k Then
+        Err.Raise vbObjectError + 513, "CalculateScores", "Settings length does not match data metrics."
+    End If
+    
+    ReDim scores(l1 To u1, 1 To 2)
+    
+    For i = l1 To u1
+        name = CStr(data(i, l2))
+        ReDim values(1 To k)
+        For j = 1 To k
+            values(j) = data(i, l2 + j)
+        Next j
+        score = ComputeWeightedScore(values, settings)
+        scores(i, 1) = name
+        scores(i, 2) = score
+    Next i
+    
+    CalculateScores = scores
+    Exit Function
+    
+ErrHandler:
+    Err.Raise Err.Number, Err.Source, Err.Description
+End Function
+
+Public Function ComputeWeightedScore(values As Variant, weights As Variant) As Double
+    Dim sum As Double
+    Dim n As Long
+    Dim lbv As Long, ubw As Long
+    Dim lbw As Long, ubw2 As Long
+    Dim idx As Long
+    Dim v As Variant, w As Variant
+    
+    If Not IsArray(values) Then Err.Raise vbObjectError + 524, "ComputeWeightedScore", "Values is not an array."
+    If Not IsArray(weights) Then Err.Raise vbObjectError + 525, "ComputeWeightedScore", "Weights is not an array."
+    
+    lbv = LBound(values): ubw = UBound(values)
+    lbw = LBound(weights): ubw2 = UBound(weights)
+    n = ubw - lbv + 1
+    If (ubw2 - lbw + 1) <> n Then
+        Err.Raise vbObjectError + 514, "ComputeWeightedScore", "Weights length does not match values."
+    End If
+    
+    sum = 0
+    For idx = 0 To n - 1
+        v = values(lbv + idx)
+        w = weights(lbw + idx)
+        If IsNumeric(v) And IsNumeric(w) Then
+            sum = sum + CDbl(v) * CDbl(w)
+        Else
+            Err.Raise vbObjectError + 515, "ComputeWeightedScore", "Non-numeric value or weight encountered."
+        End If
+    Next idx
+    
+    ComputeWeightedScore = sum
+End Function
+
+Public Function RankCollectors(scores As Variant) As Variant
+    Dim sorted As Variant
+    Dim l1 As Long, u1 As Long
+    
+    If Not IsArray(scores) Then
+        RankCollectors = scores
+        Exit Function
+    End If
+    
+    On Error GoTo ErrHandler
+    
+    l1 = LBound(scores, 1): u1 = UBound(scores, 1)
+    If u1 < l1 Then
+        RankCollectors = scores
+        Exit Function
+    End If
+    
+    sorted = scores
+    QuickSortSorted sorted, 2, l1, u1
+    RankCollectors = sorted
+    Exit Function
+    
+ErrHandler:
+    Err.Raise Err.Number, Err.Source, Err.Description
+End Function
+
+Private Sub QuickSortSorted(ByRef arr As Variant, ByVal col As Long, ByVal low As Long, ByVal high As Long)
+    Dim i As Long, j As Long
+    Dim pivot As Double
+    Dim tmpName As Variant, tmpScore As Variant
+    
+    i = low: j = high
+    pivot = arr((low + high) \ 2, col)
+    Do While i <= j
+        Do While arr(i, col) > pivot
+            i = i + 1
+        Loop
+        Do While arr(j, col) < pivot
+            j = j - 1
+        Loop
+        If i <= j Then
+            tmpName = arr(i, 1)
+            tmpScore = arr(i, col)
+            arr(i, 1) = arr(j, 1)
+            arr(i, col) = arr(j, col)
+            arr(j, 1) = tmpName
+            arr(j, col) = tmpScore
+            i = i + 1
+            j = j - 1
+        End If
+    Loop
+    If low < j Then QuickSortSorted arr, col, low, j
+    If i < high Then QuickSortSorted arr, col, i, high
+End Sub
+
+Public Function IdentifyTopPerformer(ranked As Variant) As String
+    Dim l1 As Long, u1 As Long
+    
+    If Not IsArray(ranked) Then
+        IdentifyTopPerformer = ""
+        Exit Function
+    End If
+    
+    On Error Resume Next
+    l1 = LBound(ranked, 1): u1 = UBound(ranked, 1)
+    If Err.Number <> 0 Then
+        IdentifyTopPerformer = ""
+        Exit Function
+    End If
+    On Error GoTo 0
+    
+    If u1 < l1 Then
+        IdentifyTopPerformer = ""
+    Else
+        IdentifyTopPerformer = CStr(ranked(l1, 1))
+    End If
+End Function
