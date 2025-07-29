@@ -1,0 +1,101 @@
+Option Explicit
+
+Public Function RunChecks(data As Variant) As Boolean
+    Dim nameErrors As Collection, dataErrors As Collection
+    Dim errors As Collection, anomalies As Collection
+    Set nameErrors = ValidateCollectorNames(data("Collectors"))
+    Set dataErrors = ValidateData(data("Measurements"))
+    If nameErrors.Count > 0 Or dataErrors.Count > 0 Then
+        Set errors = New Collection
+        Dim msg As Variant
+        For Each msg In nameErrors: errors.Add msg: Next
+        For Each msg In dataErrors: errors.Add msg: Next
+        ReportErrors errors
+        RunChecks = False
+        Exit Function
+    End If
+    ApplyDefaultValues data("Measurements")
+    Set anomalies = FlagAnomalies(data("Measurements"))
+    If anomalies.Count > 0 Then ReportAnomalies anomalies
+    RunChecks = True
+End Function
+
+Public Function ValidateCollectorNames(names As Variant) As Collection
+    Dim errs As New Collection
+    Dim dict As Object: Set dict = CreateObject("Scripting.Dictionary")
+    Dim i As Long, nm As String
+    For i = LBound(names) To UBound(names)
+        nm = Trim(CStr(names(i)))
+        If nm = "" Then
+            errs.Add "Collector name missing at position " & (i + 1)
+        ElseIf dict.Exists(nm) Then
+            errs.Add "Duplicate collector name: " & nm
+        Else
+            dict.Add nm, True
+        End If
+    Next i
+    Set ValidateCollectorNames = errs
+End Function
+
+Public Function ValidateData(meas As Variant) As Collection
+    Dim errs As New Collection
+    Dim r As Long, c As Long, val As Variant
+    For r = LBound(meas, 1) To UBound(meas, 1)
+        For c = LBound(meas, 2) To UBound(meas, 2)
+            val = meas(r, c)
+            If IsError(val) Then
+                errs.Add "Excel error at row " & r & ", column " & c
+            ElseIf Not IsEmpty(val) And Not IsNumeric(val) Then
+                errs.Add "Non-numeric entry at row " & r & ", column " & c & ": " & CStr(val)
+            ElseIf IsNumeric(val) Then
+                If val < 0 Or val > 100 Then
+                    errs.Add "Value out of range (0-100) at row " & r & ", column " & c & ": " & val
+                End If
+            End If
+        Next c
+    Next r
+    Set ValidateData = errs
+End Function
+
+Public Sub ApplyDefaultValues(ByRef meas As Variant)
+    Dim r As Long, c As Long
+    For r = LBound(meas, 1) To UBound(meas, 1)
+        For c = LBound(meas, 2) To UBound(meas, 2)
+            If IsError(meas(r, c)) Or IsEmpty(meas(r, c)) Or Not IsNumeric(meas(r, c)) Then
+                meas(r, c) = 0
+            End If
+        Next c
+    Next r
+End Sub
+
+Public Function FlagAnomalies(meas As Variant) As Collection
+    Dim anomalies As New Collection
+    Dim r As Long, c As Long
+    Dim prevVal As Double, currVal As Double
+    For c = LBound(meas, 2) To UBound(meas, 2)
+        For r = LBound(meas, 1) + 1 To UBound(meas, 1)
+            prevVal = CDbl(meas(r - 1, c))
+            currVal = CDbl(meas(r, c))
+            If Abs(currVal - prevVal) > 20 Then
+                anomalies.Add "Anomaly in column " & c & " between rows " & (r - 1) & " and " & r & ": change of " & Format$(Abs(currVal - prevVal), "0.00")
+            End If
+        Next r
+    Next c
+    Set FlagAnomalies = anomalies
+End Function
+
+Private Sub ReportErrors(errs As Collection)
+    Dim msg As String, e As Variant
+    For Each e In errs
+        msg = msg & e & vbCrLf
+    Next
+    MsgBox "Validation Errors:" & vbCrLf & msg, vbCritical, "Data Validation"
+End Sub
+
+Private Sub ReportAnomalies(anoms As Collection)
+    Dim msg As String, a As Variant
+    For Each a In anoms
+        msg = msg & a & vbCrLf
+    Next
+    MsgBox "Anomalies:" & vbCrLf & msg, vbExclamation, "Data Anomalies"
+End Sub
