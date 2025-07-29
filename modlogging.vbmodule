@@ -1,0 +1,83 @@
+Option Explicit
+
+Private Const LOG_DIR As String = "Logs"
+Private logFilePath As String
+Private logFileNum As Integer
+Private isTracing As Boolean
+
+Public Sub StartTrace()
+    On Error GoTo ErrHandler
+    If isTracing Then Exit Sub
+    
+    Dim fso As Object
+    Dim logDirFull As String
+    Dim basePath As String
+    
+    basePath = ThisWorkbook.Path
+    If Len(Trim(basePath)) = 0 Then
+        basePath = Environ("TEMP")
+        If Len(Trim(basePath)) = 0 Then
+            basePath = Application.DefaultFilePath
+        End If
+    End If
+    
+    logDirFull = basePath & Application.PathSeparator & LOG_DIR
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    If Not fso.FolderExists(logDirFull) Then fso.CreateFolder logDirFull
+    Set fso = Nothing
+    
+    logFilePath = logDirFull & Application.PathSeparator & "FlotationLog_" & Format(Now, "yyyymmdd_hhnnss") & ".log"
+    logFileNum = FreeFile
+    Open logFilePath For Append As #logFileNum
+    isTracing = True
+    
+    WriteLogEntry "TRACE", "Log started"
+    Exit Sub
+
+ErrHandler:
+    Debug.Print "StartTrace Error " & Err.Number & ": " & Err.Description
+    Resume Next
+End Sub
+
+Public Sub EndTrace()
+    On Error GoTo ErrHandler
+    If Not isTracing Then Exit Sub
+    
+    WriteLogEntry "TRACE", "Log ended"
+    If logFileNum > 0 Then Close #logFileNum
+    isTracing = False
+    logFileNum = 0
+    Exit Sub
+
+ErrHandler:
+    Debug.Print "EndTrace Error " & Err.Number & ": " & Err.Description
+    Resume Next
+End Sub
+
+Public Sub LogInfo(message As String)
+    WriteLogEntry "INFO", message
+End Sub
+
+Public Sub LogWarning(message As String)
+    WriteLogEntry "WARNING", message
+End Sub
+
+Public Sub LogError(message As String)
+    WriteLogEntry "ERROR", message
+End Sub
+
+Private Sub WriteLogEntry(level As String, text As String)
+    On Error GoTo ErrHandler
+    If Not isTracing Then StartTrace
+    If logFileNum <= 0 Then Exit Sub
+    
+    Dim entry As String
+    entry = "[" & Format(Now, "yyyy-mm-dd hh:nn:ss") & "] [" & level & "] " & text
+    Debug.Print entry
+    Print #logFileNum, entry
+    Exit Sub
+
+ErrHandler:
+    Debug.Print "WriteLogEntry Error " & Err.Number & ": " & Err.Description
+    Resume Next
+End Sub
