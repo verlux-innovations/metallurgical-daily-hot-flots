@@ -1,0 +1,81 @@
+Option Explicit
+' Requires reference to Microsoft Scripting Runtime
+
+Public Function ReadInputs() As Dictionary
+    Dim collectors As Dictionary
+    Set collectors = New Dictionary
+    
+    Dim nameCells As Variant
+    nameCells = Array("C14", "C26", "C38", "C50")
+    
+    Dim metrics As Variant
+    metrics = Array( _
+        Array("MassPull", "V"), _
+        Array("CuGrade", "W"), _
+        Array("PyGrade", "AH"), _
+        Array("CGrade", "Z"), _
+        Array("CuRec", "AB"), _
+        Array("PyRec", "AJ"), _
+        Array("CRec", "AE") _
+    )
+    
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.ActiveSheet
+    
+    Dim i As Long
+    For i = 0 To UBound(nameCells)
+        Dim colDict As Dictionary
+        Set colDict = New Dictionary
+        
+        Dim collectorName As String
+        collectorName = Trim(ws.Range(nameCells(i)).Value)
+        If collectorName = "" Then
+            Err.Raise vbObjectError + 1, "ReadInputs", "Collector name missing in cell " & nameCells(i)
+        End If
+        colDict.Add "Name", collectorName
+        
+        Dim m As Long
+        For m = LBound(metrics) To UBound(metrics)
+            Dim metricName As String
+            metricName = metrics(m)(0)
+            Dim dataArr(1 To 4, 1 To 4) As Double
+            colDict.Add metricName, dataArr
+        Next m
+        
+        Dim baseRow As Long
+        baseRow = 18 + i * 12
+        
+        Dim t As Long, rIdx As Long
+        For t = 1 To 4
+            For rIdx = 1 To 4
+                Dim rowNum As Long
+                rowNum = baseRow + (t - 1) * 12 + (rIdx - 1)
+                
+                For m = LBound(metrics) To UBound(metrics)
+                    metricName = metrics(m)(0)
+                    Dim colLetter As String
+                    colLetter = metrics(m)(1)
+                    Dim cellAddr As String
+                    cellAddr = colLetter & rowNum
+                    colDict(metricName)(t, rIdx) = GetNumeric(ws, cellAddr, collectorName, metricName, t, rIdx)
+                Next m
+            Next rIdx
+        Next t
+        
+        collectors.Add "Collector" & (i + 1), colDict
+    Next i
+    
+    Set ReadInputs = collectors
+End Function
+
+Private Function GetNumeric(ws As Worksheet, cellAddr As String, collectorName As String, metric As String, timePoint As Long, replicate As Long) As Double
+    Dim val As Variant
+    val = ws.Range(cellAddr).Value
+    If IsNumeric(val) Then
+        GetNumeric = CDbl(val)
+    Else
+        Err.Raise vbObjectError + 1000, "ReadInputs", _
+            "Invalid numeric value for " & metric & " of " & collectorName & _
+            " at timepoint " & timePoint & ", replicate " & replicate & " (" & cellAddr & ")"
+    End If
+End Function
