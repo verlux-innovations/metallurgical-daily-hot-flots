@@ -1,0 +1,134 @@
+Option Explicit
+
+Private Const NUM_COLLECTORS As Long = 4
+Private Const NUM_TIMEPOINTS As Long = 4
+Private Const NUM_METRICS As Long = 7
+
+Public Sub ReadInputs()
+    Dim collectorNames As Variant
+    Dim flotationData As Variant
+    Dim comments As Collection
+    Set comments = New Collection
+
+    collectorNames = ReadCollectorNames(comments)
+    flotationData = ReadFlotationData(comments)
+    WriteOutputs flotationData, collectorNames
+    WriteComments comments
+End Sub
+
+Public Function ReadCollectorNames(ByRef comments As Collection) As Variant
+    Dim ws As Worksheet
+    Dim rowsArr As Variant
+    Dim names() As String
+    Dim i As Long
+    Set ws = GetWorksheet("Data", False)
+    If ws Is Nothing Then Err.Raise vbObjectError + 1, , "Worksheet 'Data' not found."
+
+    rowsArr = Array(14, 26, 38, 50)
+    ReDim names(1 To NUM_COLLECTORS)
+
+    For i = 1 To NUM_COLLECTORS
+        With ws.Cells(rowsArr(i - 1), 3)
+            If Trim(CStr(.Value)) = "" Then
+                comments.Add "Collector name missing at " & .Address(False, False)
+                names(i) = ""
+            Else
+                names(i) = CStr(.Value)
+            End If
+        End With
+    Next i
+
+    ReadCollectorNames = names
+End Function
+
+Public Function ReadFlotationData(ByRef comments As Collection) As Variant
+    Dim ws As Worksheet
+    Dim startRows As Variant
+    Dim metricCols As Variant
+    Dim dataArr() As Double
+    Dim i As Long, t As Long, m As Long
+    Dim cell As Range
+
+    Set ws = GetWorksheet("Data", False)
+    If ws Is Nothing Then Err.Raise vbObjectError + 2, , "Worksheet 'Data' not found."
+
+    startRows = Array(18, 30, 42, 54)
+    metricCols = Array("V", "W", "AH", "Z", "AB", "AJ", "AE")
+    ReDim dataArr(1 To NUM_COLLECTORS, 1 To NUM_TIMEPOINTS, 1 To NUM_METRICS)
+
+    For i = 1 To NUM_COLLECTORS
+        For t = 1 To NUM_TIMEPOINTS
+            For m = 1 To NUM_METRICS
+                Set cell = ws.Range(metricCols(m - 1) & (startRows(i - 1) + t - 1))
+                If Not IsError(cell.Value) And IsNumeric(cell.Value) Then
+                    dataArr(i, t, m) = CDbl(cell.Value)
+                Else
+                    comments.Add "Invalid data at " & cell.Address(False, False)
+                    dataArr(i, t, m) = 0
+                End If
+            Next m
+        Next t
+    Next i
+
+    ReadFlotationData = dataArr
+End Function
+
+Public Sub WriteOutputs(ByVal results As Variant, ByVal collectorNames As Variant)
+    Dim ws As Worksheet
+    Dim header As Variant
+    Dim times As Variant
+    Dim rowIndex As Long
+    Dim i As Long, t As Long, m As Long
+
+    Set ws = GetWorksheet("Results", True)
+    ws.Cells.ClearContents
+
+    header = Array("Collector", "Time (min)", "Mass Pull (%)", "Cu Grade (%)", "Pyrite Grade (%)", "Carbon Grade (%)", "Cu Recovery (%)", "Pyrite Recovery (%)", "Carbon Recovery (%)")
+    For m = LBound(header) To UBound(header)
+        ws.Cells(1, m + 1).Value = header(m)
+    Next m
+
+    times = Array(3, 7, 11, 15)
+    rowIndex = 2
+
+    For i = 1 To UBound(collectorNames)
+        For t = 1 To NUM_TIMEPOINTS
+            ws.Cells(rowIndex, 1).Value = collectorNames(i)
+            ws.Cells(rowIndex, 2).Value = times(t - 1)
+            For m = 1 To NUM_METRICS
+                ws.Cells(rowIndex, 2 + m).Value = results(i, t, m)
+            Next m
+            rowIndex = rowIndex + 1
+        Next t
+    Next i
+End Sub
+
+Public Sub WriteComments(ByVal comments As Collection)
+    Dim ws As Worksheet
+    Dim rowIndex As Long
+    Dim itm As Variant
+
+    Set ws = GetWorksheet("Comments", True)
+    ws.Cells.ClearContents
+
+    ws.Cells(1, 1).Value = "Comments"
+    rowIndex = 2
+    For Each itm In comments
+        ws.Cells(rowIndex, 1).Value = itm
+        rowIndex = rowIndex + 1
+    Next itm
+End Sub
+
+Private Function GetWorksheet(ByVal wsName As String, Optional ByVal createIfMissing As Boolean = False) As Worksheet
+    Dim ws As Worksheet
+    For Each ws In ThisWorkbook.Worksheets
+        If ws.Name = wsName Then
+            Set GetWorksheet = ws
+            Exit Function
+        End If
+    Next ws
+    If createIfMissing Then
+        Set GetWorksheet = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count))
+        GetWorksheet.Name = wsName
+    End If
+End Function
