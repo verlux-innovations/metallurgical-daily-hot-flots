@@ -1,0 +1,59 @@
+Option Explicit
+
+Private dictRangeNames As Scripting.Dictionary
+Private dictThresholds As Scripting.Dictionary
+Private dictTextTemplates As Scripting.Dictionary
+
+Public Sub LoadConstants()
+    If dictRangeNames Is Nothing Then
+        Set dictRangeNames = New Scripting.Dictionary
+        dictRangeNames.CompareMode = vbTextCompare
+        dictRangeNames.Add "DataEntry", "tblDataEntry"
+        dictRangeNames.Add "CollectorsList", "tblCollectors"
+        dictRangeNames.Add "ResultsOutput", "tblResults"
+        dictRangeNames.Add "ConstantsSheet", "Constants"
+    End If
+    If dictThresholds Is Nothing Then
+        Set dictThresholds = New Scripting.Dictionary
+        dictThresholds.CompareMode = vbTextCompare
+        dictThresholds.Add "MinDataRows", 5
+        dictThresholds.Add "MaxCollectors", 10
+        dictThresholds.Add "MaxErrorRate", 0.02
+        dictThresholds.Add "DefaultThreshold", 0.5
+    End If
+    If dictTextTemplates Is Nothing Then
+        Set dictTextTemplates = New Scripting.Dictionary
+        dictTextTemplates.CompareMode = vbTextCompare
+        dictTextTemplates.Add "ErrorMissingData", "No data found in range '{0}'."
+        dictTextTemplates.Add "ErrorInvalidInput", "Invalid input for '{0}': {1}"
+        dictTextTemplates.Add "MsgProcessComplete", "Process complete: {0} records processed."
+        dictTextTemplates.Add "ReportTitle", "Flotation Analysis Report"
+    End If
+End Sub
+
+Public Function GetRangeName(ByVal key As String) As String
+    LoadConstants
+    If dictRangeNames.Exists(key) Then
+        GetRangeName = dictRangeNames(key)
+    Else
+        Err.Raise vbObjectError + 1, "modConstants.GetRangeName", "Range name not defined for key: " & key
+    End If
+End Function
+
+Public Function GetThreshold(ByVal key As String) As Double
+    LoadConstants
+    If dictThresholds.Exists(key) Then
+        GetThreshold = dictThresholds(key)
+    Else
+        Err.Raise vbObjectError + 2, "modConstants.GetThreshold", "Threshold not defined for key: " & key
+    End If
+End Function
+
+Public Function GetTextTemplate(ByVal key As String) As String
+    LoadConstants
+    If dictTextTemplates.Exists(key) Then
+        GetTextTemplate = dictTextTemplates(key)
+    Else
+        Err.Raise vbObjectError + 3, "modConstants.GetTextTemplate", "Text template not defined for key: " & key
+    End If
+End Function
