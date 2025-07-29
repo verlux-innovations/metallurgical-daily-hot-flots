@@ -1,0 +1,387 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<customUI xmlns="http://schemas.microsoft.com/office/2009/07/customui">
+  <ribbon startFromScratch="false">
+    <tabs>
+      <tab id="tabFlotation" label="Flotation">
+        <group id="grpAnalyze" label="Analysis">
+          <button id="btnGenerate" label="Generate Comments" onAction="GenerateComments" imageMso="HappyFace"/>
+        </group>
+      </tab>
+    </tabs>
+  </ribbon>
+</customUI>
+
+' ThisWorkbook
+Option Explicit
+
+Private Sub Workbook_Open()
+    On Error GoTo ErrHandler
+    Application.ScreenUpdating = False
+    If Not gRibbon Is Nothing Then gRibbon.Invalidate
+    EnsureSheetExists InputSheetName
+    EnsureSheetExists SettingsSheetName
+    EnsureSheetExists ReportSheetName
+    LoadUserSettings
+    If Not ValidateTemplate Then
+        MsgBox "Template validation failed.", vbCritical, "Flotation Analysis"
+        Application.ScreenUpdating = True
+        Exit Sub
+    End If
+    Application.ScreenUpdating = True
+    Exit Sub
+ErrHandler:
+    Application.ScreenUpdating = True
+    MsgBox "Error in Workbook_Open: " & Err.Description, vbCritical, "Flotation Analysis"
+End Sub
+
+Private Sub Workbook_BeforeClose(Cancel As Boolean)
+    Dim result As VbMsgBoxResult
+    On Error GoTo Cleanup
+    If Not Me.Saved Then
+        result = MsgBox("Do you want to save changes to FlotationAnalysis.xlsm?", vbYesNoCancel + vbQuestion, "Save Workbook")
+        Select Case result
+            Case vbYes
+                Me.Save
+            Case vbNo
+                Me.Saved = True
+            Case vbCancel
+                Cancel = True
+                Exit Sub
+        End Select
+    End If
+    SaveUserSettings
+Cleanup:
+    Set gRibbon = Nothing
+    On Error GoTo 0
+End Sub
+
+' modConstants
+Option Explicit
+
+Public Const InputSheetName As String = "Input"
+Public Const SettingsSheetName As String = "Settings"
+Public Const ReportSheetName As String = "Report"
+Public Const LogSheetName As String = "Log"
+
+Public Const RngCollectorHeader As String = "A1"
+Public Const RngCollector1 As String = "C14"
+Public Const RngCollector2 As String = "C26"
+Public Const RngCollector3 As String = "C38"
+Public Const RngCollector4 As String = "C50"
+Public Const DataColumns As Integer = 5
+
+' modSettings
+Option Explicit
+
+Public WeightKinetics As Double
+Public WeightMassPull As Double
+Public WeightRecovery As Double
+Public TemplateStrength As String
+Public TemplateWeakness As String
+Public TemplateKinetics As String
+Public TemplateMassPull As String
+
+Public Sub LoadUserSettings()
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.Sheets(SettingsSheetName)
+    With ws
+        WeightKinetics = CDbl(.Range("WeightKinetics").Value)
+        WeightMassPull = CDbl(.Range("WeightMassPull").Value)
+        WeightRecovery = CDbl(.Range("WeightRecovery").Value)
+        TemplateStrength = .Range("TemplateStrength").Value
+        TemplateWeakness = .Range("TemplateWeakness").Value
+        TemplateKinetics = .Range("TemplateKinetics").Value
+        TemplateMassPull = .Range("TemplateMassPull").Value
+    End With
+End Sub
+
+Public Sub SaveUserSettings()
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.Sheets(SettingsSheetName)
+    With ws
+        .Range("WeightKinetics").Value = WeightKinetics
+        .Range("WeightMassPull").Value = WeightMassPull
+        .Range("WeightRecovery").Value = WeightRecovery
+        .Range("TemplateStrength").Value = TemplateStrength
+        .Range("TemplateWeakness").Value = TemplateWeakness
+        .Range("TemplateKinetics").Value = TemplateKinetics
+        .Range("TemplateMassPull").Value = TemplateMassPull
+    End With
+End Sub
+
+' modUtilities
+Option Explicit
+
+Public Sub EnsureSheetExists(sheetName As String)
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(sheetName)
+    On Error GoTo 0
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Sheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+        ws.Name = sheetName
+        If sheetName = SettingsSheetName Then ws.Visible = xlSheetVeryHidden
+    End If
+End Sub
+
+' modDataIO
+Option Explicit
+
+Public Type CollectorData
+    Name As String
+    Recovery() As Double
+    Kinetics() As Double
+    MassPull() As Double
+End Type
+
+Public Collectors() As CollectorData
+
+Public Sub ReadInputs()
+    Dim ws As Worksheet
+    Dim i As Integer, startRow As Integer, j As Integer
+    Set ws = ThisWorkbook.Sheets(InputSheetName)
+    ReDim Collectors(1 To 4)
+    For i = 1 To 4
+        startRow = 2 + i * 12
+        Collectors(i).Name = CStr(ws.Range("C" & startRow).Value)
+        ReDim Collectors(i).Recovery(1 To DataColumns)
+        ReDim Collectors(i).Kinetics(1 To DataColumns)
+        ReDim Collectors(i).MassPull(1 To DataColumns)
+        For j = 1 To DataColumns
+            Collectors(i).Recovery(j) = CDbl(ws.Cells(startRow, 3 + j).Value)
+            Collectors(i).Kinetics(j) = CDbl(ws.Cells(startRow + 1, 3 + j).Value)
+            Collectors(i).MassPull(j) = CDbl(ws.Cells(startRow + 2, 3 + j).Value)
+        Next j
+    Next i
+End Sub
+
+Public Sub WriteOutputs(strengthComments As Collection, weaknessComments As Collection, kineticsComments As Collection, massPullComments As Collection)
+    Dim ws As Worksheet
+    Dim i As Integer, r As Long
+    Set ws = ThisWorkbook.Sheets(ReportSheetName)
+    ws.Cells.Clear
+    r = 2
+    ws.Cells(1, 1).Value = "Flotation Analysis Report"
+    For i = 1 To strengthComments.Count
+        ws.Cells(r, 1).Value = "? " & strengthComments(i)
+        r = r + 1
+    Next i
+    r = r + 1
+    For i = 1 To weaknessComments.Count
+        ws.Cells(r, 1).Value = "? " & weaknessComments(i)
+        r = r + 1
+    Next i
+    r = r + 1
+    For i = 1 To kineticsComments.Count
+        ws.Cells(r, 1).Value = "? " & kineticsComments(i)
+        r = r + 1
+    Next i
+    r = r + 1
+    For i = 1 To massPullComments.Count
+        ws.Cells(r, 1).Value = "? " & massPullComments(i)
+        r = r + 1
+    Next i
+End Sub
+
+' modValidation
+Option Explicit
+
+Public Function ValidateTemplate() As Boolean
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.Sheets(InputSheetName)
+    On Error GoTo Fail
+    If ws.Range(RngCollectorHeader).Value <> "Collector" Then GoTo Fail
+    If ws.Range(RngCollector1).Value = "" Then GoTo Fail
+    If ws.Range(RngCollector2).Value = "" Then GoTo Fail
+    If ws.Range(RngCollector3).Value = "" Then GoTo Fail
+    If ws.Range(RngCollector4).Value = "" Then GoTo Fail
+    If ThisWorkbook.Names("WeightKinetics") Is Nothing Then GoTo Fail
+    If ThisWorkbook.Names("WeightMassPull") Is Nothing Then GoTo Fail
+    If ThisWorkbook.Names("WeightRecovery") Is Nothing Then GoTo Fail
+    ValidateTemplate = True
+    Exit Function
+Fail:
+    ValidateTemplate = False
+End Function
+
+Public Sub RunChecks()
+    Dim i As Integer, j As Integer
+    For i = 1 To UBound(Collectors)
+        If Collectors(i).Name = "" Then LogWarning "Collector " & i & " name is blank."
+        For j = 1 To DataColumns
+            If Collectors(i).Recovery(j) < 0 Or Collectors(i).Recovery(j) > 100 Then LogError "Recovery out of range for " & Collectors(i).Name
+            If Collectors(i).Kinetics(j) < 0 Then LogError "Negative kinetics for " & Collectors(i).Name
+            If Collectors(i).MassPull(j) < 0 Then LogError "Negative mass pull for " & Collectors(i).Name
+        Next j
+    Next i
+End Sub
+
+' modAnalysis
+Option Explicit
+
+Public Type AnalysisResult
+    Name As String
+    Score As Double
+    AvgRecovery As Double
+    AvgKinetics As Double
+    AvgMassPull As Double
+End Type
+
+Public Results() As AnalysisResult
+
+Public Sub CalculateScores()
+    Dim i As Integer, j As Integer
+    Dim recSum As Double, kinSum As Double, mpSum As Double
+    ReDim Results(1 To UBound(Collectors))
+    For i = 1 To UBound(Collectors)
+        recSum = 0: kinSum = 0: mpSum = 0
+        For j = 1 To DataColumns
+            recSum = recSum + Collectors(i).Recovery(j)
+            kinSum = kinSum + Collectors(i).Kinetics(j)
+            mpSum = mpSum + Collectors(i).MassPull(j)
+        Next j
+        Results(i).Name = Collectors(i).Name
+        Results(i).AvgRecovery = recSum / DataColumns
+        Results(i).AvgKinetics = kinSum / DataColumns
+        Results(i).AvgMassPull = mpSum / DataColumns
+        Results(i).Score = Results(i).AvgRecovery * WeightRecovery + Results(i).AvgKinetics * WeightKinetics + Results(i).AvgMassPull * WeightMassPull
+    Next i
+    LogInfo "Calculated scores."
+End Sub
+
+' modReport
+Option Explicit
+
+Public Sub WriteComments()
+    Dim i As Integer, bestIdx As Integer
+    Dim maxScore As Double
+    Dim strength As Collection, weakness As Collection, kineticsC As Collection, massPullC As Collection
+    Set strength = New Collection
+    Set weakness = New Collection
+    Set kineticsC = New Collection
+    Set massPullC = New Collection
+    bestIdx = 1
+    maxScore = Results(1).Score
+    For i = 2 To UBound(Results)
+        If Results(i).Score > maxScore Then
+            maxScore = Results(i).Score
+            bestIdx = i
+        End If
+    Next i
+    strength.Add Replace(TemplateStrength, "{Collector}", Results(bestIdx).Name)
+    weakness.Add Replace(TemplateWeakness, "{Collector}", Results(bestIdx).Name)
+    kineticsC.Add Replace(TemplateKinetics, "{Collector}", Results(bestIdx).Name)
+    massPullC.Add Replace(TemplateMassPull, "{Collector}", Results(bestIdx).Name)
+    WriteOutputs strength, weakness, kineticsC, massPullC
+End Sub
+
+' modUI
+Option Explicit
+
+Public gRibbon As IRibbonUI
+
+Public Sub OnRibbonLoad(ribbon As IRibbonUI)
+    Set gRibbon = ribbon
+End Sub
+
+Public Sub GenerateComments(control As IRibbonControl)
+    On Error GoTo ErrHandler
+    StartTrace
+    ReadInputs
+    RunChecks
+    CalculateScores
+    WriteComments
+    EndTrace
+    Exit Sub
+ErrHandler:
+    LogError "Error in GenerateComments: " & Err.Description
+    MsgBox "Error: " & Err.Description, vbCritical, "Flotation Analysis"
+    EndTrace
+End Sub
+
+' modLogging
+Option Explicit
+
+Private mRow As Long
+
+Public Sub StartTrace()
+    Dim ws As Worksheet
+    Set ws = EnsureLogSheet
+    mRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row + 1
+    LogInfo "---- Execution Started: " & Now & " ----"
+End Sub
+
+Public Sub EndTrace()
+    LogInfo "---- Execution Ended: " & Now & " ----"
+End Sub
+
+Public Sub LogInfo(msg As String)
+    LogMessage "INFO", msg
+End Sub
+
+Public Sub LogWarning(msg As String)
+    LogMessage "WARN", msg
+End Sub
+
+Public Sub LogError(msg As String)
+    LogMessage "ERROR", msg
+End Sub
+
+Private Sub LogMessage(level As String, msg As String)
+    Dim ws As Worksheet
+    Set ws = EnsureLogSheet
+    ws.Cells(mRow, 1).Value = Now
+    ws.Cells(mRow, 2).Value = level
+    ws.Cells(mRow, 3).Value = msg
+    mRow = mRow + 1
+End Sub
+
+Private Function EnsureLogSheet() As Worksheet
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(LogSheetName)
+    On Error GoTo 0
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Sheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+        ws.Name = LogSheetName
+        ws.Visible = xlSheetVeryHidden
+        ws.Range("A1:C1").Value = Array("Timestamp", "Level", "Message")
+    End If
+    Set EnsureLogSheet = ws
+End Function
+
+' modTests
+Option Explicit
+
+Public Sub TestValidateTemplate()
+    Debug.Assert ValidateTemplate = True
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.Sheets(InputSheetName)
+    Dim oldVal As Variant
+    oldVal = ws.Range(RngCollectorHeader).Value
+    ws.Range(RngCollectorHeader).Value = "X"
+    Debug.Assert ValidateTemplate = False
+    ws.Range(RngCollectorHeader).Value = oldVal
+End Sub
+
+Public Sub TestCalculateScores()
+    WeightRecovery = 1
+    WeightKinetics = 1
+    WeightMassPull = 1
+    Dim i As Integer, j As Integer
+    ReDim Collectors(1 To 2)
+    For i = 1 To 2
+        Collectors(i).Name = "C" & i
+        ReDim Collectors(i).Recovery(1 To DataColumns)
+        ReDim Collectors(i).Kinetics(1 To DataColumns)
+        ReDim Collectors(i).MassPull(1 To DataColumns)
+        For j = 1 To DataColumns
+            Collectors(i).Recovery(j) = j
+            Collectors(i).Kinetics(j) = j * 2
+            Collectors(i).MassPull(j) = j * 3
+        Next j
+    Next i
+    CalculateScores
+    Debug.Assert UBound(Results) = 2
+    Debug.Assert Abs(Results(1).Score - (Results(1).AvgRecovery + Results(1).AvgKinetics + Results(1).AvgMassPull)) < 0.0001
+End Sub
