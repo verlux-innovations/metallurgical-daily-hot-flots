@@ -1,0 +1,103 @@
+Option Explicit
+
+Private AllTestsPassed As Boolean
+
+Public Function RunAllTests() As Boolean
+    AllTestsPassed = True
+    Debug.Print "Running Validation Tests..."
+    TestValidation
+    Debug.Print ""
+    Debug.Print "Running Analysis Tests..."
+    TestAnalysis
+    Debug.Print ""
+    If AllTestsPassed Then
+        Debug.Print "All tests PASSED."
+    Else
+        Debug.Print "Some tests FAILED."
+    End If
+    RunAllTests = AllTestsPassed
+End Function
+
+Private Sub TestValidation()
+    Dim valid As Boolean
+    Dim measurements As Variant
+    Dim nullName As Variant
+    Dim longName As String
+
+    ' Collector name tests
+    valid = modValidation.IsValidCollectorName("Xanthate")
+    AssertEqual True, valid, "Collector name validation with valid name"
+    
+    valid = modValidation.IsValidCollectorName("")
+    AssertEqual False, valid, "Collector name validation with empty string"
+    
+    valid = modValidation.IsValidCollectorName("   ")
+    AssertEqual False, valid, "Collector name validation with whitespace-only string"
+    
+    nullName = Null
+    valid = modValidation.IsValidCollectorName(nullName)
+    AssertEqual False, valid, "Collector name validation with Null input"
+    
+    longName = String(256, "A")
+    valid = modValidation.IsValidCollectorName(longName)
+    AssertEqual False, valid, "Collector name validation with excessively long name"
+
+    ' Measurements validation tests
+    measurements = Array(10, 20, 30)
+    valid = modValidation.AreMeasurementsValid(measurements)
+    AssertEqual True, valid, "Measurements validation with numeric array"
+    
+    measurements = Array(10, "a", 30)
+    valid = modValidation.AreMeasurementsValid(measurements)
+    AssertEqual False, valid, "Measurements validation with non-numeric value"
+    
+    measurements = Null
+    valid = modValidation.AreMeasurementsValid(measurements)
+    AssertEqual False, valid, "Measurements validation with Null input"
+    
+    measurements = Array()
+    valid = modValidation.AreMeasurementsValid(measurements)
+    AssertEqual False, valid, "Measurements validation with empty array"
+End Sub
+
+Private Sub TestAnalysis()
+    Dim recovery As Double
+    Dim enrichment As Double
+    Dim errNum As Long
+
+    ' Standard cases
+    recovery = modAnalysis.CalculateRecovery(5, 2)
+    AssertEqual 0.4, recovery, "Recovery calculation (5 concentrate, 2 feed)"
+    
+    enrichment = modAnalysis.CalculateEnrichment(5, 2)
+    AssertEqual 2.5, enrichment, "Enrichment calculation (5 concentrate, 2 feed)"
+
+    ' Edge-case: zero feed should raise error
+    Err.Clear
+    On Error Resume Next
+    recovery = modAnalysis.CalculateRecovery(5, 0)
+    errNum = Err.Number
+    On Error GoTo 0
+    AssertEqual True, (errNum <> 0), "Recovery calculation raises error on zero feed"
+End Sub
+
+Public Sub AssertEqual(expected As Variant, actual As Variant, message As String)
+    Dim isEqual As Boolean
+
+    If IsNull(expected) Or IsNull(actual) Then
+        isEqual = (IsNull(expected) And IsNull(actual))
+    ElseIf IsNumeric(expected) And IsNumeric(actual) Then
+        isEqual = Abs(CDbl(expected) - CDbl(actual)) < 1E-6
+    ElseIf VarType(expected) = vbString And VarType(actual) = vbString Then
+        isEqual = (StrComp(CStr(expected), CStr(actual), vbTextCompare) = 0)
+    Else
+        isEqual = (expected = actual)
+    End If
+    
+    If isEqual Then
+        Debug.Print "PASS: " & message
+    Else
+        Debug.Print "FAIL: " & message & " Expected: " & expected & " Actual: " & actual
+        AllTestsPassed = False
+    End If
+End Sub
