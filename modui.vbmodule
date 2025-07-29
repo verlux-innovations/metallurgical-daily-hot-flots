@@ -1,0 +1,45 @@
+Attribute VB_Name = "modUI"
+Option Explicit
+
+Private gRibbonUI As IRibbonUI
+Private mIsGeneratingComments As Boolean
+
+Public Sub InitializeRibbon(ribbon As IRibbonUI)
+    Set gRibbonUI = ribbon
+End Sub
+
+Public Sub OnGenerateComments(control As IRibbonControl)
+    On Error GoTo ErrHandler
+    If gRibbonUI Is Nothing Then
+        Err.Raise vbObjectError + 1000, "OnGenerateComments", "Ribbon UI is not initialized."
+    End If
+    ' Prevent re-entry by disabling the button via getEnabled callback
+    mIsGeneratingComments = True
+    gRibbonUI.InvalidateControl control.ID
+    ' Execute the main comment generation routine
+    Call GenerateComments
+    ' Restore button state
+    mIsGeneratingComments = False
+    gRibbonUI.InvalidateControl control.ID
+    Exit Sub
+ErrHandler:
+    ' Ensure button is re-enabled after error
+    mIsGeneratingComments = False
+    If Not gRibbonUI Is Nothing Then
+        gRibbonUI.InvalidateControl control.ID
+    End If
+    ShowError "Error generating comments:" & vbCrLf & Err.Description
+End Sub
+
+Public Function OnGenerateCommentsEnabled(control As IRibbonControl) As Boolean
+    On Error Resume Next
+    OnGenerateCommentsEnabled = Not mIsGeneratingComments
+End Function
+
+Public Sub ShowError(message As String)
+    MsgBox message, vbCritical Or vbOKOnly, "Error"
+End Sub
+
+Public Sub ShowWarning(message As String)
+    MsgBox message, vbExclamation Or vbOKOnly, "Warning"
+End Sub
