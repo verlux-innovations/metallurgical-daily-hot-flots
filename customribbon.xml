@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<customUI xmlns="http://schemas.microsoft.com/office/2009/07/customui" onLoad="RibbonOnLoad">
+  <ribbon>
+    <tabs>
+      <tab id="TabCustomFlotation" getLabel="GetTabLabel">
+        <group id="grpInput" getLabel="GetGroupLabel">
+          <button id="btnOpenInputForm" getLabel="GetButtonLabel" imageMso="TableInsert" size="large" onAction="ShowInputForm" keytip="I" screentip="Enter Flotation Data" supertip="Open the data entry form for collector names and measurements."/>
+        </group>
+        <group id="grpAnalysis" getLabel="GetGroupLabel">
+          <button id="btnRunAnalysis" getLabel="GetButtonLabel" imageMso="Calculate" size="large" onAction="RunFlotationAnalysis" keytip="R" screentip="Analyze Data" supertip="Validate inputs and perform lab data analysis."/>
+          <button id="btnExportReport" getLabel="GetButtonLabel" imageMso="ReportDocument" size="large" onAction="ExportAnalysisReport" keytip="E" screentip="Export Results" supertip="Generate and export analysis report."/>
+        </group>
+      </tab>
+    </tabs>
+  </ribbon>
+</customUI>
