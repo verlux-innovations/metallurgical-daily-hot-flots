@@ -1,0 +1,112 @@
+Option Explicit
+
+Public Sub CalculateScores()
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.ActiveSheet
+
+    Dim metrics As Variant
+    metrics = Array( _
+        Array("Mass Pull", "V", 0, 100), _
+        Array("Cu Grade", "W", 0, 100), _
+        Array("Cu Recovery", "AB", 0, 100) _
+    )
+    Dim metricCount As Long
+    metricCount = UBound(metrics) - LBound(metrics) + 1
+
+    Dim arrAllValues() As Double
+    ReDim arrAllValues(0 To 3, 0 To metricCount - 1, 1 To 4)
+
+    Dim errors As Collection
+    Set errors = New Collection
+
+    Dim i As Long, j As Long, k As Long
+    Dim rowStart As Long, rowName As Long
+    Dim collectorName As String
+
+    ' Validation phase
+    For i = 0 To 3
+        rowStart = 18 + 12 * i
+        rowName = 14 + 12 * i
+        collectorName = Trim(ws.Range("C" & rowName).Value)
+        If collectorName = "" Then errors.Add "Collector name missing at " & ws.Range("C" & rowName).Address
+
+        For j = 1 To 4
+            For k = 0 To metricCount - 1
+                Dim colLetter As String
+                colLetter = metrics(k)(1)
+                Dim cell As Range
+                Set cell = ws.Range(colLetter & rowStart + j - 1)
+                cell.Interior.ColorIndex = xlNone
+                Dim valOut As Double
+                If Not ValidateCell(cell, metrics(k)(0), metrics(k)(2), metrics(k)(3), valOut, errors) Then
+                    cell.Interior.Color = vbYellow
+                Else
+                    arrAllValues(i, k, j) = valOut
+                End If
+            Next k
+        Next j
+    Next i
+
+    If errors.Count > 0 Then
+        Dim msg As String
+        msg = "Please fix the following errors before continuing:" & vbNewLine
+        Dim e As Variant
+        For Each e In errors
+            msg = msg & "- " & e & vbNewLine
+        Next e
+        MsgBox msg, vbExclamation, "Input Validation Errors"
+        Exit Sub
+    End If
+
+    ' Calculation phase
+    Dim avgValues() As Double
+    ReDim avgValues(0 To metricCount - 1)
+
+    For i = 0 To 3
+        rowStart = 18 + 12 * i
+        rowName = 14 + 12 * i
+
+        For k = 0 To metricCount - 1
+            Dim sumVal As Double
+            sumVal = 0
+            For j = 1 To 4
+                sumVal = sumVal + arrAllValues(i, k, j)
+            Next j
+            avgValues(k) = sumVal / 4
+        Next k
+
+        Dim compositeScore As Double
+        compositeScore = avgValues(0) * avgValues(1) * avgValues(2) / 10000
+
+        With ws
+            .Range("F" & rowName).Value = Round(avgValues(0), 2)
+            .Range("G" & rowName).Value = Round(avgValues(1), 2)
+            .Range("H" & rowName).Value = Round(avgValues(2), 2)
+            .Range("I" & rowName).Value = Round(compositeScore, 2)
+        End With
+    Next i
+
+    MsgBox "Scores calculated successfully.", vbInformation, "Calculation Complete"
+End Sub
+
+Private Function ValidateCell(cell As Range, metricName As String, minValue As Double, maxValue As Double, ByRef valOut As Double, errors As Collection) As Boolean
+    Dim rawVal As Variant
+    rawVal = cell.Value
+    If IsEmpty(rawVal) Or Trim(CStr(rawVal)) = "" Then
+        errors.Add metricName & " is missing at " & cell.Address
+        ValidateCell = False
+        Exit Function
+    End If
+    If Not IsNumeric(rawVal) Then
+        errors.Add metricName & " is not numeric at " & cell.Address
+        ValidateCell = False
+        Exit Function
+    End If
+    valOut = CDbl(rawVal)
+    If valOut < minValue Or valOut > maxValue Then
+        errors.Add metricName & " out of range (" & valOut & ") at " & cell.Address
+        ValidateCell = False
+        Exit Function
+    End If
+    ValidateCell = True
+End Function
