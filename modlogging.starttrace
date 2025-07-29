@@ -1,0 +1,63 @@
+Attribute VB_Name = "modlogging"
+Option Explicit
+
+Public TraceOn As Boolean
+Public LogFileNum As Integer
+Public LogFilePath As String
+
+Public Sub StartTrace(Optional ByVal LogFolder As String = "")
+    Dim fso As Object
+    Dim folderPath As String
+    Dim fileName As String
+    
+    If TraceOn Then Exit Sub
+    
+    On Error GoTo ErrHandler
+    
+    ' Determine log folder
+    If Len(LogFolder) = 0 Then
+        If Len(ThisWorkbook.Path) = 0 Then
+            MsgBox "Workbook must be saved before starting trace. Defaulting log folder to your user profile.", vbInformation, "Start Trace"
+            folderPath = Environ("USERPROFILE") & "\Logs"
+        Else
+            folderPath = ThisWorkbook.Path & "\Logs"
+        End If
+    Else
+        folderPath = LogFolder
+    End If
+    
+    ' Create FileSystemObject
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    
+    ' Ensure folder exists
+    If Not fso.FolderExists(folderPath) Then
+        fso.CreateFolder folderPath
+    End If
+    
+    ' Generate log file name
+    fileName = "Trace_" & Format(Now, "yyyy-mm-dd_hh-nn-ss") & ".log"
+    LogFilePath = fso.BuildPath(folderPath, fileName)
+    
+    ' Open log file
+    LogFileNum = FreeFile
+    Open LogFilePath For Output As #LogFileNum
+    
+    ' Write header
+    Print #LogFileNum, "Trace session started: " & Format(Now, "yyyy-mm-dd hh:nn:ss")
+    Print #LogFileNum, "Workbook: " & ThisWorkbook.FullName
+    Print #LogFileNum, "----------------------------------------"
+    
+    TraceOn = True
+    
+Cleanup:
+    If Not fso Is Nothing Then Set fso = Nothing
+    Exit Sub
+
+ErrHandler:
+    MsgBox "Error starting trace: " & Err.Number & " - " & Err.Description, vbCritical, "modlogging.StartTrace"
+    Debug.Print "modlogging.StartTrace error: " & Err.Number & " - " & Err.Description
+    On Error Resume Next
+    If LogFileNum > 0 Then Close #LogFileNum
+    TraceOn = False
+    Resume Cleanup
+End Sub
