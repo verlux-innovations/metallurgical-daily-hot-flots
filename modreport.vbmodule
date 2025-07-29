@@ -1,0 +1,109 @@
+Option Explicit
+
+Private Templates As Variant
+
+Public Sub WriteComments(analysisResults As Variant, templates As Variant)
+    Dim ws As Worksheet
+    Dim headerRow As Range
+    Dim colStrength As Long, colWeakness As Long, colKinetics As Long, colMassPull As Long
+    Dim result As Variant
+    Dim strengthComments As Variant, weaknessComments As Variant
+    Dim kineticsComments As Variant, massPullComments As Variant
+    Dim i As Long, startRow As Long, outRow As Long, endRow As Long
+
+    Set ws = ThisWorkbook.Worksheets("Report")
+    Set headerRow = ws.Rows(1)
+    On Error GoTo ErrHandler
+    colStrength = Application.Match("Strength Comments", headerRow, 0)
+    colWeakness = Application.Match("Weakness Comments", headerRow, 0)
+    colKinetics = Application.Match("Kinetics Comments", headerRow, 0)
+    colMassPull = Application.Match("Mass Pull Comments", headerRow, 0)
+
+    Templates = templates
+    startRow = 2
+    endRow = startRow + UBound(analysisResults) - LBound(analysisResults)
+
+    ws.Range(ws.Cells(startRow, colStrength), ws.Cells(endRow, colStrength)).ClearContents
+    ws.Range(ws.Cells(startRow, colWeakness), ws.Cells(endRow, colWeakness)).ClearContents
+    ws.Range(ws.Cells(startRow, colKinetics), ws.Cells(endRow, colKinetics)).ClearContents
+    ws.Range(ws.Cells(startRow, colMassPull), ws.Cells(endRow, colMassPull)).ClearContents
+
+    For i = LBound(analysisResults) To UBound(analysisResults)
+        result = analysisResults(i)
+        strengthComments = GenerateStrengthComments(result)
+        weaknessComments = GenerateWeaknessComments(result)
+        kineticsComments = GenerateKineticsComments(result)
+        massPullComments = GenerateMassPullComments(result)
+        outRow = startRow + i - LBound(analysisResults)
+
+        ws.Cells(outRow, colStrength).Value = Join(strengthComments, vbNewLine)
+        ws.Cells(outRow, colWeakness).Value = Join(weaknessComments, vbNewLine)
+        ws.Cells(outRow, colKinetics).Value = Join(kineticsComments, vbNewLine)
+        ws.Cells(outRow, colMassPull).Value = Join(massPullComments, vbNewLine)
+    Next i
+
+    Exit Sub
+
+ErrHandler:
+    MsgBox "Error writing comments: " & Err.Description, vbCritical
+End Sub
+
+Private Function GenerateCategoryComments(category As String, result As Variant) As Variant
+    Dim tmplArr As Variant
+    Dim t As Long, lb As Long, ub As Long
+    Dim comments() As String
+    Dim errNum As Long
+
+    On Error Resume Next
+    tmplArr = Templates(category)
+    errNum = Err.Number
+    On Error GoTo 0
+
+    If errNum <> 0 Then
+        GenerateCategoryComments = Array()
+        Exit Function
+    End If
+
+    If IsEmpty(tmplArr) Then
+        GenerateCategoryComments = Array()
+        Exit Function
+    End If
+
+    lb = LBound(tmplArr)
+    ub = UBound(tmplArr)
+    ReDim comments(0 To ub - lb)
+
+    For t = lb To ub
+        comments(t - lb) = ApplyTemplate(tmplArr(t), result)
+    Next t
+
+    GenerateCategoryComments = comments
+End Function
+
+Public Function GenerateStrengthComments(result As Variant) As Variant
+    GenerateStrengthComments = GenerateCategoryComments("Strength", result)
+End Function
+
+Public Function GenerateWeaknessComments(result As Variant) As Variant
+    GenerateWeaknessComments = GenerateCategoryComments("Weakness", result)
+End Function
+
+Public Function GenerateKineticsComments(result As Variant) As Variant
+    GenerateKineticsComments = GenerateCategoryComments("Kinetics", result)
+End Function
+
+Public Function GenerateMassPullComments(result As Variant) As Variant
+    GenerateMassPullComments = GenerateCategoryComments("MassPull", result)
+End Function
+
+Private Function ApplyTemplate(templateText As String, result As Variant) As String
+    Dim field As Variant
+    Dim txt As String
+
+    txt = templateText
+    For Each field In result.Keys
+        txt = Replace(txt, "<<" & field & ">>", CStr(result(field)))
+    Next field
+
+    ApplyTemplate = txt
+End Function
