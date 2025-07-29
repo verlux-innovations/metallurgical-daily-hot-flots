@@ -1,0 +1,91 @@
+Option Explicit
+
+Public Sub RunChecks()
+    Const MaxMsgChars As Long = 2000
+    Dim ws As Worksheet
+    Dim nameRows As Variant, dataRows As Variant
+    Dim metricNames As Variant, metricCols As Variant
+    Dim i As Long, j As Long, r As Long
+    Dim cell As Range
+    Dim collectorName As String
+    Dim errorCount As Long
+    Dim errorMsg As String
+    Dim colNum As Long
+    
+    On Error GoTo ErrHandler
+    Application.ScreenUpdating = False
+    
+    Set ws = ThisWorkbook.Worksheets("Data")
+    
+    nameRows = Array(14, 26, 38, 50)
+    dataRows = Array(18, 30, 42, 54)
+    metricNames = Array("Mass Pull (%)", "Cu Grade (%)", "Pyrite Grade (%)", "Carbon Grade (%)", "Cu Recovery (%)", "Pyrite Recovery (%)", "Carbon Recovery (%)")
+    metricCols = Array("V", "W", "AH", "Z", "AB", "AJ", "AE")
+    
+    errorCount = 0
+    errorMsg = ""
+    
+    ' Clear previous highlights
+    For i = LBound(nameRows) To UBound(nameRows)
+        ws.Cells(nameRows(i), "C").Interior.ColorIndex = xlColorIndexNone
+        For j = LBound(metricCols) To UBound(metricCols)
+            colNum = ws.Columns(metricCols(j)).Column
+            For r = dataRows(i) To dataRows(i) + 3
+                ws.Cells(r, colNum).Interior.ColorIndex = xlColorIndexNone
+            Next r
+        Next j
+    Next i
+    
+    ' Validation
+    For i = LBound(nameRows) To UBound(nameRows)
+        collectorName = Trim(ws.Cells(nameRows(i), "C").Value & "")
+        If collectorName = "" Then
+            ws.Cells(nameRows(i), "C").Interior.Color = vbYellow
+            errorCount = errorCount + 1
+            errorMsg = errorMsg & "Collector name missing at row " & nameRows(i) & "." & vbNewLine
+        End If
+        
+        For j = LBound(metricCols) To UBound(metricCols)
+            colNum = ws.Columns(metricCols(j)).Column
+            For r = dataRows(i) To dataRows(i) + 3
+                Set cell = ws.Cells(r, colNum)
+                If Len(Trim(cell.Value & "")) = 0 Then
+                    cell.Interior.Color = vbYellow
+                    errorCount = errorCount + 1
+                    errorMsg = errorMsg & metricNames(j) & " is blank for collector " & _
+                        IIf(collectorName <> "", collectorName, "row " & nameRows(i)) & " at row " & r & "." & vbNewLine
+                ElseIf Not IsNumeric(cell.Value) Then
+                    cell.Interior.Color = vbYellow
+                    errorCount = errorCount + 1
+                    errorMsg = errorMsg & metricNames(j) & " is not numeric for collector " & _
+                        IIf(collectorName <> "", collectorName, "row " & nameRows(i)) & " at row " & r & "." & vbNewLine
+                ElseIf cell.Value < 0 Or cell.Value > 100 Then
+                    cell.Interior.Color = vbYellow
+                    errorCount = errorCount + 1
+                    errorMsg = errorMsg & metricNames(j) & " out of range (0-100) for collector " & _
+                        IIf(collectorName <> "", collectorName, "row " & nameRows(i)) & " at row " & r & "." & vbNewLine
+                End If
+            Next r
+        Next j
+    Next i
+    
+CleanUp:
+    Application.ScreenUpdating = True
+    
+    If errorCount > 0 Then
+        If Len(errorMsg) > MaxMsgChars Then
+            errorMsg = Left$(errorMsg, MaxMsgChars) & vbNewLine & "... more errors not displayed."
+        End If
+        MsgBox "Validation completed with " & errorCount & " errors. Please correct highlighted cells." & _
+               vbNewLine & vbNewLine & errorMsg, vbExclamation, "Validation Errors"
+    Else
+        MsgBox "All checks passed successfully.", vbInformation, "Validation"
+    End If
+    
+    Exit Sub
+
+ErrHandler:
+    Application.ScreenUpdating = True
+    MsgBox "Unexpected error in RunChecks: " & Err.Number & " - " & Err.Description, vbCritical, "Error"
+    Resume CleanUp
+End Sub
