@@ -1,0 +1,75 @@
+Option Explicit
+Private WeightDict As Scripting.Dictionary
+Private TemplateDict As Scripting.Dictionary
+
+Public Sub LoadSettings()
+    Dim ws As Worksheet
+    Dim lastRow As Long
+    Dim i As Long
+    
+    If WeightDict Is Nothing Then
+        Set WeightDict = New Scripting.Dictionary
+    Else
+        WeightDict.RemoveAll
+    End If
+    
+    If TemplateDict Is Nothing Then
+        Set TemplateDict = New Scripting.Dictionary
+    Else
+        TemplateDict.RemoveAll
+    End If
+    
+    ' Load weights from Settings sheet
+    Set ws = Nothing
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets("Settings")
+    On Error GoTo 0
+    If ws Is Nothing Then Err.Raise vbObjectError + 1, "modsettings.LoadSettings", "Settings sheet not found"
+    
+    lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+    For i = 2 To lastRow
+        Dim paramName As String
+        Dim cellValue As Variant
+        paramName = Trim(CStr(ws.Cells(i, 1).Value))
+        If Len(paramName) > 0 Then
+            cellValue = ws.Cells(i, 2).Value
+            If IsNumeric(cellValue) Then
+                WeightDict(paramName) = CDbl(cellValue)
+            End If
+        End If
+    Next i
+    
+    ' Load templates from Templates sheet
+    Set ws = Nothing
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets("Templates")
+    On Error GoTo 0
+    If ws Is Nothing Then Err.Raise vbObjectError + 2, "modsettings.LoadSettings", "Templates sheet not found"
+    
+    lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+    For i = 2 To lastRow
+        Dim templateKey As String
+        templateKey = Trim(CStr(ws.Cells(i, 1).Value))
+        If Len(templateKey) > 0 Then
+            TemplateDict(templateKey) = CStr(ws.Cells(i, 2).Value)
+        End If
+    Next i
+End Sub
+
+Public Function GetWeight(parameter As String) As Double
+    If WeightDict Is Nothing Or WeightDict.Count = 0 Then LoadSettings
+    If WeightDict.Exists(parameter) Then
+        GetWeight = WeightDict(parameter)
+    Else
+        Err.Raise vbObjectError + 100, "modsettings.GetWeight", "Weight for parameter '" & parameter & "' not found"
+    End If
+End Function
+
+Public Function GetTemplate(key As String) As String
+    If TemplateDict Is Nothing Or TemplateDict.Count = 0 Then LoadSettings
+    If TemplateDict.Exists(key) Then
+        GetTemplate = TemplateDict(key)
+    Else
+        Err.Raise vbObjectError + 101, "modsettings.GetTemplate", "Template for key '" & key & "' not found"
+    End If
+End Function
